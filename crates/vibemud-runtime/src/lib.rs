@@ -296,19 +296,32 @@ fn pid_is_zombie(pid: i64) -> bool {
 
 #[cfg(windows)]
 fn pid_is_running(pid: i64) -> bool {
-    if pid <= 0 {
+    process_is_alive(pid)
+}
+
+#[cfg(windows)]
+pub fn process_is_alive(pid: i64) -> bool {
+    use std::ffi::c_void;
+
+    #[link(name = "kernel32")]
+    unsafe extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, process_id: u32) -> *mut c_void;
+        fn WaitForSingleObject(handle: *mut c_void, milliseconds: u32) -> u32;
+        fn CloseHandle(handle: *mut c_void) -> i32;
+    }
+
+    if pid <= 0 || pid > u32::MAX as i64 {
         return false;
     }
-    hidden_windows_command("tasklist")
-        .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
-        .output()
-        .map(|output| {
-            output.status.success()
-                && String::from_utf8_lossy(&output.stdout).lines().any(|line| {
-                    line.contains(&format!("\"{pid}\"")) || line.contains(&format!(",{pid},"))
-                })
-        })
-        .unwrap_or(false)
+    const SYNCHRONIZE: u32 = 0x0010_0000;
+    const WAIT_TIMEOUT: u32 = 0x0000_0102;
+    let handle = unsafe { OpenProcess(SYNCHRONIZE, 0, pid as u32) };
+    if handle.is_null() {
+        return false;
+    }
+    let alive = unsafe { WaitForSingleObject(handle, 0) == WAIT_TIMEOUT };
+    unsafe { CloseHandle(handle) };
+    alive
 }
 
 #[cfg(not(any(unix, windows)))]

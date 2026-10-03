@@ -673,21 +673,7 @@ fn pid_is_zombie(pid: i64) -> bool {
 
 #[cfg(windows)]
 fn pid_is_running(pid: i64) -> bool {
-    use std::os::windows::process::CommandExt;
-    if pid <= 0 {
-        return false;
-    }
-    Command::new("tasklist")
-        .creation_flags(0x08000000) // CREATE_NO_WINDOW
-        .args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"])
-        .output()
-        .map(|output| {
-            output.status.success()
-                && String::from_utf8_lossy(&output.stdout).lines().any(|line| {
-                    line.contains(&format!("\"{pid}\"")) || line.contains(&format!(",{pid},"))
-                })
-        })
-        .unwrap_or(false)
+    vibemud_runtime::process_is_alive(pid)
 }
 
 #[cfg(not(any(unix, windows)))]
