@@ -37,4 +37,6 @@ node npm/scripts/check-release-metadata.js
 
 PowerShell 파일을 바꿨다면 Windows에서 parser 검사도 실행하세요. 실제 Claude 창의 사용감을 바꾼 경우, 가능하면 **시작 → 장비·지도·상점 → 창 접기·복귀 → 정지 → 프로세스 정리**를 직접 확인하고, 사용한 OS와 Claude Code 버전을 변경 설명에 적어 주세요. mod 테스트 호스트의 요소 검증은 Windows·Desktop 실기 확인과 구분해 주세요.
 
+전체 플랫폼 빌드와 npm 패키지 dry-run은 릴리스 준비 시 [package dry run](https://github.com/treestar84/vibemud/actions/workflows/package-dry-run.yml)을 수동 실행합니다. 일반 푸시·PR은 이 대형 워크플로를 자동으로 실행하지 않습니다.
+
 공개 트리에는 소스, 플러그인, npm 패키징, GitHub 검증 워크플로, 설치 스크립트와 핵심 문서만 넣습니다. 생성물·게임 데이터·로그·개인 참고 자료·미디어 데모는 제외합니다. 문서가 필요하면 새 `docs/` 폴더보다 기존 README나 보안·기여 안내를 먼저 고쳐 주세요.

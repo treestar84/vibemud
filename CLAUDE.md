@@ -7,7 +7,7 @@ VibeMUD is a Rust-based local idle MUD/RPG that runs beside Claude Code as a sid
 - Default integration: Claude Code 2.1.287+ mod pane through `/vibemud:mud ...` and immediate `/mud ...` (unless another plugin owns the short name).
 - Native CLI and plugin source are 0.2.0, unreleased. Use the source installation until a matching release is published; do not claim this is npm latest.
 - Node.js 18+ is required. Windows defaults to shell-free native executable calls, without Bash, tmux, WSL or wt.exe.
-- macOS Claude Code 2.1.288 has an interactive smoke covering start, tables, hide, reopen, and stop. Windows/Linux native CI tests are configured; Windows real-host/IME and Desktop real-app smoke remain unverified.
+- macOS Claude Code 2.1.288 has an interactive smoke covering start, tables, hide, reopen, and stop. Windows/Linux native CI tests are available through manual workflow dispatch; Windows real-host/IME and Desktop real-app smoke remain unverified.
 - Existing tmux, cmux and macOS Ghostty panes remain explicit `legacy` compatibility options. Retire them only after stabilization evidence.
 - Codex, iTerm2 and `~mud` routing remain unsupported.
 
@@ -50,6 +50,7 @@ Public tracked source should stay minimal:
 - Claude plugin/marketplace source: `.claude-plugin/`, `claude-marketplace/`.
 - npm package source: `npm/`.
 - Release/validation automation: `.github/workflows/`.
+- The six-target package dry-run workflow is manual-only; do not trigger it on ordinary pushes or PRs. Its uploaded artifacts expire after three days.
 - Supported installers only: `scripts/install.sh`, `scripts/install.ps1`, `scripts/install-claude-plugin.sh`, `scripts/install-claude-plugin.ps1`, `scripts/uninstall-claude-plugin.sh`.
 
 Local-only or generated folders/files are intentionally ignored and should not be added to Git:

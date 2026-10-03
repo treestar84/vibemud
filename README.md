@@ -1,7 +1,5 @@
 # VibeMUD
 
-[![package dry run](https://github.com/treestar84/vibemud/actions/workflows/package-dry-run.yml/badge.svg)](https://github.com/treestar84/vibemud/actions/workflows/package-dry-run.yml)
-
 **Claude Code 옆에서 함께 진행되는 로컬 방치형 RPG.** `/mud start`로 게임 창을 열면 코딩하는 동안 캐릭터가 사냥하고 성장합니다. 장비·던전·퀘스트는 Claude Code 안의 mod 창에서 조작합니다.
 
 *An idle RPG inside a Claude Code mod pane. The game runs locally in Rust and SQLite; see [Quick start](#빠른-시작) for source installation.*
@@ -85,7 +83,7 @@ Claude Code가 창 배치를 결정합니다. 넓은 전체 화면 터미널에�
 /vibemud:mud legacy end
 ```
 
-외부 창 검증 대상은 tmux, cmux, macOS Ghostty입니다. Windows의 기본 mod 경로는 Bash·WSL·tmux·`wt.exe` 없이 Node launcher가 네이티브 `.exe`를 호출하도록 구현했습니다. **Windows 실기, Windows IME, Desktop 앱의 실제 화면은 아직 검증하지 못했습니다.** Windows x64 빌드·Rust·bridge 검사와 ARM64 빌드 검사는 [GitHub Actions](https://github.com/treestar84/vibemud/actions/workflows/package-dry-run.yml)에서 확인할 수 있습니다. Codex와 iTerm2는 지원 대상이 아닙니다.
+외부 창 검증 대상은 tmux, cmux, macOS Ghostty입니다. Windows의 기본 mod 경로는 Bash·WSL·tmux·`wt.exe` 없이 Node launcher가 네이티브 `.exe`를 호출하도록 구현했습니다. **Windows 실기, Windows IME, Desktop 앱의 실제 화면은 아직 검증하지 못했습니다.** Windows x64 빌드·Rust·bridge 검사와 ARM64 빌드 검사는 [수동 실행하는 GitHub Actions](https://github.com/treestar84/vibemud/actions/workflows/package-dry-run.yml)에서 확인할 수 있습니다. Codex와 iTerm2는 지원 대상이 아닙니다.
 
 ## 개발과 공개
 
@@ -112,5 +110,7 @@ node npm/scripts/check-release-metadata.js
 (cd npm && npm run test:resolve)
 (cd npm && npm pack --dry-run --json | node scripts/check-pack-contents.js)
 ```
+
+전체 플랫폼·패키지 검증은 릴리스 준비 시에만 GitHub의 **Actions → package dry run → Run workflow**에서 수동 실행합니다. 일반 푸시와 PR에는 자동 실행되지 않으며, 업로드한 빌드 아티팩트는 3일 뒤 만료됩니다.
 
 기여 방법은 [CONTRIBUTING.md](CONTRIBUTING.md), 취약점 제보는 [SECURITY.md](SECURITY.md), CLI 패키징은 [npm/README.md](npm/README.md)를 참고하세요. MIT 라이선스입니다.

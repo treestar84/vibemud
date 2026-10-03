@@ -22,6 +22,7 @@ VibeMUD is a Rust-based local idle RPG that runs beside Claude Code through a Cl
 
 - Keep the public GitHub tree minimal. Do not add `docs/`, PRD drafts, screenshots, local agent folders, runtime DBs, logs, generated package artifacts, or local terminal helper scripts to Git.
 - Do not add old external-pane demo assets, private reference notes, or stale issue/PR templates to the public repository. Keep only GitHub validation/release workflows.
+- Keep the six-target package dry-run workflow manual-only; ordinary pushes and PRs must not start it automatically. Keep uploaded artifacts short-lived.
 - Root `AGENTS.md` and `CLAUDE.md` are intentional public guidance files and should stay at repository root.
 - Prefer updating `README.md`, `CONTRIBUTING.md`, or `SECURITY.md` over adding new public docs.
 - Avoid new dependencies unless necessary for the shipped CLI/plugin and documented in the relevant manifest.
