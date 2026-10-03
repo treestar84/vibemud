@@ -31,6 +31,6 @@ node --test npm/test/bridge.test.js
 (cd npm && npm pack --dry-run --json | node scripts/check-pack-contents.js)
 ```
 
-GitHub Actions는 플랫폼별 바이너리를 빌드하고 mod 테스트, 패키지 조립, 설치 smoke를 수행하도록 설정돼 있습니다. 아직 원격 CI의 성공을 이 문서에서 보증하지 않습니다. 배포 시에는 플랫폼별 `@vibemud/native-*`를 먼저 공개하고, 모두 확인한 뒤 루트 `vibemud`를 공개합니다. `publish-npm` 워크플로는 수동 실행과 릴리스 태그·빌드 아티팩트 확인을 요구합니다. **저장소 공개만으로 npm 패키지가 배포되지는 않습니다.**
+[GitHub Actions](https://github.com/treestar84/vibemud/actions/workflows/package-dry-run.yml)는 플랫폼별 바이너리를 빌드하고 mod 테스트, 패키지 조립, 설치 smoke를 수행합니다. 현재 통과 여부는 해당 워크플로에서 확인하세요. 배포 시에는 플랫폼별 `@vibemud/native-*`를 먼저 공개하고, 모두 확인한 뒤 루트 `vibemud`를 공개합니다. `publish-npm` 워크플로는 수동 실행과 릴리스 태그·빌드 아티팩트 확인을 요구합니다. **저장소 공개만으로 npm 패키지가 배포되지는 않습니다.**
 
 소스와 문제 제보: [treestar84/vibemud](https://github.com/treestar84/vibemud). 사용자 설치·게임 조작은 [루트 README](../README.md)를 참고하세요.
