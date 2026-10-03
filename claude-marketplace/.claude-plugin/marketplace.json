@@ -1,0 +1,24 @@
+{
+  "name": "vibemud-local",
+  "owner": {
+    "name": "VibeMUD"
+  },
+  "metadata": {
+    "description": "VibeMUD 방치형 RPG 플러그인을 로컬 Claude Code에서 사용하기 위한 마켓플레이스",
+    "version": "0.2.0"
+  },
+  "plugins": [
+    {
+      "name": "vibemud",
+      "source": "./plugins/vibemud",
+      "description": "코딩 컨텍스트를 읽지 않고 Claude Code 옆에서 로컬 VibeMUD RPG를 조작합니다.",
+      "category": "developer-tools",
+      "tags": [
+        "game",
+        "terminal",
+        "rpg",
+        "vibemud"
+      ]
+    }
+  ]
+}

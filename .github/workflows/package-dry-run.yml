@@ -1,0 +1,198 @@
+name: package dry run
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-native:
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-24.04
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+          - target: aarch64-apple-darwin
+            runner: macos-14
+          - target: x86_64-pc-windows-msvc
+            runner: windows-2025
+          - target: aarch64-pc-windows-msvc
+            runner: windows-2025
+            smoke_gap_allowed: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+      - name: Ensure npm trusted-publishing capable CLI
+        run: npm install -g npm@^11.5.1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build release binaries
+        run: cargo build --workspace --release --target ${{ matrix.target }}
+      - name: Rust regression tests where runnable
+        if: matrix.smoke_gap_allowed != true
+        run: cargo test --workspace --target ${{ matrix.target }}
+      - name: Native mod bridge smoke (spaces, Unicode, retries, reset, sessions)
+        if: matrix.smoke_gap_allowed != true
+        env:
+          VIBEMUD_TEST_BIN_DIR: ${{ github.workspace }}/target/${{ matrix.target }}/release
+        run: node --test npm/test/bridge.test.js
+      - name: Parse PowerShell scripts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $Failed = $false
+          foreach ($Script in @(
+            'scripts/install.ps1',
+            'scripts/install-claude-plugin.ps1',
+            'claude-marketplace/plugins/vibemud/scripts/vibemud-claude.ps1'
+          )) {
+            $Tokens = $null
+            $Errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile((Resolve-Path $Script).Path, [ref]$Tokens, [ref]$Errors)
+            if ($Errors -and $Errors.Count -gt 0) {
+              $Failed = $true
+              Write-Host "::error file=$Script::PowerShell parse errors"
+              $Errors | ForEach-Object { Write-Host $_.ToString() }
+            } else {
+              Write-Host "parsed OK: $Script"
+            }
+          }
+          if ($Failed) { exit 1 }
+      - name: Smoke CLI help where runnable
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ matrix.smoke_gap_allowed }}" == "true" ]]; then
+            echo "Smoke gap explicitly documented for ${{ matrix.target }}; artifact build still required."
+            exit 0
+          fi
+          suffix=""
+          if [[ "${{ runner.os }}" == "Windows" ]]; then suffix=".exe"; fi
+          for bin in vibemud mudctl vibemud-runtime vibemud-hud; do
+            "target/${{ matrix.target }}/release/${bin}${suffix}" --help
+          done
+      - name: Smoke native Windows PowerShell shims where runnable
+        if: runner.os == 'Windows' && matrix.smoke_gap_allowed != true
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force -Path 'target/release' | Out-Null
+          foreach ($bin in @('vibemud', 'mudctl', 'vibemud-runtime', 'vibemud-hud')) {
+            Copy-Item "target/${{ matrix.target }}/release/$bin.exe" "target/release/$bin.exe" -Force
+          }
+          powershell -ExecutionPolicy Bypass -File scripts/install.ps1 -For cli -SkipBuild
+          foreach ($bin in @('vibemud', 'mudctl', 'vibemud-runtime', 'vibemud-hud')) {
+            & "$env:LOCALAPPDATA\VibeMUD\bin\$bin.cmd" --help
+          }
+      - name: Generate checksums
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "target/${{ matrix.target }}/release"
+          if command -v shasum >/dev/null 2>&1; then
+            shasum -a 256 vibemud* mudctl* > "checksums-${{ matrix.target }}.txt"
+          else
+            sha256sum vibemud* mudctl* > "checksums-${{ matrix.target }}.txt"
+          fi
+      - name: Upload native artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vibemud-${{ matrix.target }}
+          path: |
+            target/${{ matrix.target }}/release/vibemud*
+            target/${{ matrix.target }}/release/mudctl*
+            target/${{ matrix.target }}/release/checksums-${{ matrix.target }}.txt
+          if-no-files-found: error
+
+  package-dry-run:
+    name: package dry run
+    runs-on: ubuntu-24.04
+    needs: [build-native, mod-tests]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+      - name: Ensure npm trusted-publishing capable CLI
+        run: npm install -g npm@^11.5.1
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/native-download
+          pattern: vibemud-*
+      - name: Collect promoted native artifacts
+        run: node npm/scripts/collect-native-artifacts.js --input artifacts/native-download --output artifacts/native
+      - name: Verify release metadata
+        run: node npm/scripts/check-release-metadata.js
+      - name: Test npm resolver
+        run: npm --prefix npm run test:resolve
+      - name: Stage root package from promoted artifacts
+        run: VIBEMUD_BINARY_ROOT="$PWD/artifacts/native" node npm/scripts/stage-packages.js --stage stage1 --dist dist/npm
+      - name: Stage optional packages from promoted artifacts
+        run: VIBEMUD_BINARY_ROOT="$PWD/artifacts/native" node npm/scripts/stage-packages.js --stage stage2 --dist dist/npm
+      - name: Root package dry-run and content check
+        run: |
+          cd dist/npm/vibemud
+          npm pack --dry-run --json | node ../../../npm/scripts/check-pack-contents.js
+      - name: Optional package dry-runs and content checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          native_packages=(dist/npm/@vibemud/native-*)
+          test "${#native_packages[@]}" -eq 6
+          for pkg in "${native_packages[@]}"; do
+            (cd "$pkg" && npm pack --dry-run --json | node ../../../../npm/scripts/check-pack-contents.js)
+          done
+      - name: Temp-prefix install smoke for root package
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd dist/npm/vibemud && npm pack --json)
+          smoke_dir="$(mktemp -d)"
+          npm install --prefix "$smoke_dir" ./dist/npm/vibemud/vibemud-*.tgz
+          for bin in vibemud mudctl vibemud-runtime vibemud-hud; do
+            "$smoke_dir/node_modules/.bin/$bin" --help
+          done
+      - name: Upload staged package tree
+        uses: actions/upload-artifact@v4
+        with:
+          name: vibemud-npm-staging-${{ github.sha }}
+          path: dist/npm
+          if-no-files-found: error
+
+      - name: Upload normalized native artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vibemud-native-normalized-${{ github.sha }}
+          path: artifacts/native
+          if-no-files-found: error
+
+  mod-tests:
+    name: Claude Code mod contracts
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+      - name: Install pinned Claude Code test host
+        run: npm install -g @anthropic-ai/claude-code@2.1.288
+      - name: Validate and exercise the mod without a model or sign-in
+        run: |
+          claude plugin validate ./claude-marketplace/plugins/vibemud --strict
+          claude plugin test ./claude-marketplace/plugins/vibemud

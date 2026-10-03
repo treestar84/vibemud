@@ -1,0 +1,31 @@
+[workspace]
+members = [
+  "crates/vibemud-core",
+  "crates/vibemud-db",
+  "crates/vibemud-hud",
+  "crates/vibemud-runtime",
+  "crates/vibemud-cli",
+  "crates/vibemud-integrations",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+version = "0.2.0"
+license = "MIT"
+authors = ["Treestar"]
+
+[workspace.dependencies]
+anyhow = "1.0"
+clap = { version = "4.5", features = ["derive"] }
+rand = "0.8"
+rand_chacha = "0.3"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tempfile = "3.10"
+thiserror = "1.0"
+time = { version = "0.3", features = ["formatting", "macros", "parsing"] }
+toml = "0.8"
+unicode-width = "0.2"
+uuid = { version = "1.8", features = ["v4"] }

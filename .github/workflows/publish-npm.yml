@@ -1,0 +1,209 @@
+name: publish npm packages
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing release tag to publish; must equal v<package version>'
+        required: true
+      package_artifact_run_id:
+        description: 'Successful package-dry-run workflow run id that produced promoted artifacts for this tag/commit'
+        required: true
+      confirm_publish:
+        description: 'Type publish-vibemud to confirm'
+        required: true
+
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+
+jobs:
+  guard:
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      tag_sha: ${{ steps.release.outputs.tag_sha }}
+    steps:
+      - name: Validate workflow inputs
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          CONFIRM_PUBLISH: ${{ inputs.confirm_publish }}
+          PACKAGE_ARTIFACT_RUN_ID: ${{ inputs.package_artifact_run_id }}
+        run: |
+          set -euo pipefail
+          test "$CONFIRM_PUBLISH" = "publish-vibemud"
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$PACKAGE_ARTIFACT_RUN_ID" =~ ^[0-9]+$ ]]
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+      - name: Ensure npm trusted-publishing capable CLI
+        run: npm install -g npm@^11.5.1
+      - id: release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PACKAGE_ARTIFACT_RUN_ID: ${{ inputs.package_artifact_run_id }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./npm/package.json').version")"
+          test "$RELEASE_TAG" = "v$version"
+          node npm/scripts/check-release-metadata.js
+          npm --version | node -e "const fs=require('fs'); const semver=fs.readFileSync(0,'utf8').trim().split('.').map(Number); if (semver[0] < 11 || (semver[0] === 11 && semver[1] < 5)) process.exit(1);"
+          tag_sha="$(git rev-parse HEAD)"
+          resolved_tag_sha="$(git rev-list -n 1 "refs/tags/$RELEASE_TAG")"
+          test "$tag_sha" = "$resolved_tag_sha"
+          artifact_head_sha="$(python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.request
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          run_id = os.environ["PACKAGE_ARTIFACT_RUN_ID"]
+          token = os.environ["GH_TOKEN"]
+          req = urllib.request.Request(
+              f"https://api.github.com/repos/{repo}/actions/runs/{run_id}",
+              headers={
+                  "Authorization": f"Bearer {token}",
+                  "Accept": "application/vnd.github+json",
+                  "X-GitHub-Api-Version": "2022-11-28",
+              },
+          )
+          with urllib.request.urlopen(req, timeout=30) as response:
+              data = json.load(response)
+          head_sha = data.get("head_sha")
+          if not head_sha:
+              print("package artifact workflow run did not expose head_sha", file=sys.stderr)
+              sys.exit(1)
+          print(head_sha)
+          PY
+          )"
+          test "$artifact_head_sha" = "$tag_sha"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag_sha=$tag_sha" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: guard
+    runs-on: ubuntu-24.04
+    environment: npm-production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.guard.outputs.tag_sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.14.0'
+          registry-url: 'https://registry.npmjs.org'
+      - name: Ensure npm trusted-publishing capable CLI
+        run: npm install -g npm@^11.5.1
+      - name: Configure npm token bootstrap when provided
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "::notice::NPM_TOKEN secret is not configured; npm publish will use trusted publishing/OIDC."
+            exit 0
+          fi
+          npmrc="${NPM_CONFIG_USERCONFIG:-$RUNNER_TEMP/.npmrc}"
+          printf '//registry.npmjs.org/:_authToken=%s\n' "$NODE_AUTH_TOKEN" > "$npmrc"
+          chmod 0600 "$npmrc"
+          echo "NPM_CONFIG_USERCONFIG=$npmrc" >> "$GITHUB_ENV"
+
+      - name: Download promoted package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.package_artifact_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: vibemud-npm-staging-${{ needs.guard.outputs.tag_sha }}
+          path: dist/npm
+      - name: Download normalized native checksums
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.package_artifact_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: vibemud-native-normalized-${{ needs.guard.outputs.tag_sha }}
+          path: artifacts/native
+      - name: Verify promoted artifacts before publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f artifacts/native/checksums.json
+          test -d dist/npm/vibemud
+          node npm/scripts/check-release-metadata.js
+          node npm/scripts/verify-native-checksums.js --native-root artifacts/native --packages-root dist/npm
+          (cd dist/npm/vibemud && npm pack --dry-run --json | node ../../../npm/scripts/check-pack-contents.js)
+          shopt -s nullglob
+          native_packages=(dist/npm/@vibemud/native-*)
+          test "${#native_packages[@]}" -eq 6
+          for pkg in "${native_packages[@]}"; do
+            (cd "$pkg" && npm pack --dry-run --json | node ../../../../npm/scripts/check-pack-contents.js)
+          done
+      - name: Publish optional packages first, then root package
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          version="${{ needs.guard.outputs.version }}"
+          native_packages=(dist/npm/@vibemud/native-*)
+          test "${#native_packages[@]}" -eq 6
+
+          package_name() {
+            node -p "require('./$1/package.json').name"
+          }
+
+          registry_has_version() {
+            local name="$1"
+            npm view "${name}@${version}" version >/dev/null 2>&1
+          }
+
+          wait_for_registry_version() {
+            local name="$1"
+            local attempt
+            for attempt in {1..60}; do
+              if registry_has_version "$name"; then
+                return 0
+              fi
+              sleep 10
+            done
+            echo "::error::${name}@${version} was published but is not visible from npm view yet"
+            return 1
+          }
+
+          for pkg in "${native_packages[@]}"; do
+            name="$(package_name "$pkg")"
+            if registry_has_version "$name"; then
+              echo "::notice::${name}@${version} already exists; skipping native publish"
+              continue
+            fi
+            echo "Publishing ${name}@${version}"
+            (cd "$pkg" && npm publish --access public --provenance)
+            wait_for_registry_version "$name"
+          done
+
+          for pkg in "${native_packages[@]}"; do
+            name="$(package_name "$pkg")"
+            if ! registry_has_version "$name"; then
+              echo "::error::Native package ${name}@${version} is missing; refusing to publish root vibemud"
+              exit 1
+            fi
+          done
+
+          root_name="$(package_name dist/npm/vibemud)"
+          if registry_has_version "$root_name"; then
+            echo "::notice::${root_name}@${version} already exists; skipping root publish"
+            exit 0
+          fi
+          (cd dist/npm/vibemud && npm publish --provenance)
+          wait_for_registry_version "$root_name"

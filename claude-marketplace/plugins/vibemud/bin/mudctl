@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+cmd_name="$(basename "$0")"
+self_path="$(cd "$(dirname "$0")" && pwd -P)/${cmd_name}"
+
+try_exec() {
+  local candidate="$1"
+  shift
+  if [[ -x "$candidate" ]]; then
+    local resolved
+    resolved="$(cd "$(dirname "$candidate")" && pwd -P)/$(basename "$candidate")"
+    if [[ "$resolved" != "$self_path" ]]; then
+      exec "$candidate" "$@"
+    fi
+  fi
+}
+
+if [[ -n "${VIBEMUD_BIN_DIR:-}" ]]; then
+  try_exec "${VIBEMUD_BIN_DIR}/${cmd_name}" "$@"
+fi
+
+try_exec "${HOME}/.local/share/vibemud/bin/${cmd_name}" "$@"
+
+if [[ -n "${VIBEMUD_DEV_ROOT:-}" ]]; then
+  dev_root="$(cd "${VIBEMUD_DEV_ROOT}" && pwd -P)"
+  try_exec "${dev_root}/target/release/${cmd_name}" "$@"
+  try_exec "${dev_root}/target/debug/${cmd_name}" "$@"
+fi
+
+cat >&2 <<ERR
+VibeMUD binary '${cmd_name}' was not found.
+
+Fix options:
+  1. From the VibeMUD repo, run: scripts/install-claude-plugin.sh
+  2. Or install shims: scripts/install.sh --for claude
+  3. Or set VIBEMUD_BIN_DIR=/path/to/directory-containing-${cmd_name}
+  4. For local development only, set VIBEMUD_DEV_ROOT=/path/to/vibemud
+ERR
+exit 127

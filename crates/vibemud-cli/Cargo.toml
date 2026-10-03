@@ -1,0 +1,39 @@
+[package]
+name = "vibemud-cli"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+rusqlite.workspace = true
+serde_json.workspace = true
+time.workspace = true
+toml.workspace = true
+unicode-width.workspace = true
+vibemud-core = { path = "../vibemud-core" }
+vibemud-db = { path = "../vibemud-db" }
+vibemud-hud = { path = "../vibemud-hud" }
+vibemud-runtime = { path = "../vibemud-runtime" }
+vibemud-integrations = { path = "../vibemud-integrations" }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[[bin]]
+name = "vibemud"
+path = "src/bin/vibemud.rs"
+
+[[bin]]
+name = "mudctl"
+path = "src/bin/mudctl.rs"
+
+[[bin]]
+name = "vibemud-runtime"
+path = "src/bin/vibemud-runtime.rs"
+
+[[bin]]
+name = "vibemud-hud"
+path = "src/bin/vibemud-hud.rs"

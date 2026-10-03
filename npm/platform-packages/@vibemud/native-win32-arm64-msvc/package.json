@@ -1,0 +1,32 @@
+{
+  "name": "@vibemud/native-win32-arm64-msvc",
+  "version": "0.2.0",
+  "description": "Native VibeMUD binaries for aarch64-pc-windows-msvc",
+  "license": "MIT",
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "bin",
+    "scripts",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "vibemud": {
+    "target": "aarch64-pc-windows-msvc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/treestar84/vibemud"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  }
+}

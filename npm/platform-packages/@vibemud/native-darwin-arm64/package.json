@@ -1,0 +1,32 @@
+{
+  "name": "@vibemud/native-darwin-arm64",
+  "version": "0.2.0",
+  "description": "Native VibeMUD binaries for aarch64-apple-darwin",
+  "license": "MIT",
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "arm64"
+  ],
+  "files": [
+    "bin",
+    "scripts",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "vibemud": {
+    "target": "aarch64-apple-darwin"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/treestar84/vibemud"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  }
+}

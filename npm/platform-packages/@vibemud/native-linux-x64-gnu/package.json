@@ -1,0 +1,35 @@
+{
+  "name": "@vibemud/native-linux-x64-gnu",
+  "version": "0.2.0",
+  "description": "Native VibeMUD binaries for x86_64-unknown-linux-gnu",
+  "license": "MIT",
+  "os": [
+    "linux"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "bin",
+    "scripts",
+    "README.md",
+    "LICENSE",
+    "package.json"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "vibemud": {
+    "target": "x86_64-unknown-linux-gnu"
+  },
+  "libc": [
+    "glibc"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/treestar84/vibemud"
+  },
+  "scripts": {
+    "postinstall": "node scripts/postinstall.js"
+  }
+}
