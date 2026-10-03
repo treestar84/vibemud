@@ -4,7 +4,7 @@
 // invoking npm.cmd, PowerShell, a shell, or interpolating game input into code.
 const fs = require('node:fs');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawn, spawnSync } = require('node:child_process');
 
 function resolveNative(options = {}) {
   const env = options.env || process.env;
@@ -61,7 +61,50 @@ function resolveNative(options = {}) {
   throw new Error('VibeMUD native CLI not found. Install the bridge-capable VibeMUD release or set VIBEMUD_BIN_DIR, then restart Claude Code.');
 }
 
-function main(argv) {
+function runNative(binary, argv, env) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(binary, ['bridge', ...argv], {
+      env, shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+    });
+    const stdout = []; const stderr = [];
+    let bytes = 0; let exited = false; let exitCode = null; let settled = false; let afterExit;
+    const limit = 2 * 1024 * 1024;
+    const timeout = setTimeout(() => fail(new Error('VibeMUD native process timed out')), 15000);
+    function cleanup() {
+      clearTimeout(timeout); clearTimeout(afterExit);
+      child.stdout?.destroy(); child.stderr?.destroy();
+    }
+    function fail(error) {
+      if (settled) return;
+      settled = true; child.kill(); cleanup(); reject(error);
+    }
+    function finish() {
+      if (settled || !exited) return;
+      settled = true; cleanup();
+      resolve({ status: exitCode, stdout: Buffer.concat(stdout).toString('utf8'), stderr: Buffer.concat(stderr).toString('utf8') });
+    }
+    child.stdout.on('data', chunk => {
+      bytes += chunk.length; if (bytes > limit) return fail(new Error('VibeMUD native output is too large'));
+      stdout.push(chunk);
+      // A detached Windows runtime may inherit the pipe. The CLI's JSON line
+      // and process exit are sufficient; waiting for pipe EOF can hang forever.
+      if (exited && chunk.includes(10)) finish();
+    });
+    child.stderr.on('data', chunk => {
+      bytes += chunk.length; if (bytes > limit) return fail(new Error('VibeMUD native output is too large'));
+      stderr.push(chunk);
+    });
+    child.on('error', fail);
+    child.on('exit', status => {
+      exited = true; exitCode = status;
+      if (stdout.some(chunk => chunk.includes(10))) finish();
+      else afterExit = setTimeout(finish, 1000);
+    });
+    child.on('close', finish);
+  });
+}
+
+async function main(argv) {
   try {
     if (argv[0] === '--legacy') {
       const name = argv[1];
@@ -78,11 +121,7 @@ function main(argv) {
     const env = { ...process.env };
     delete env.NODE_OPTIONS;
     delete env.VSCODE_INSPECTOR_OPTIONS;
-    const result = spawnSync(binary, ['bridge', ...argv], {
-      env, shell: false, windowsHide: true, encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'], timeout: 15000, maxBuffer: 2 * 1024 * 1024,
-    });
-    if (result.error) throw result.error;
+    const result = await runNative(binary, argv, env);
     if (result.stdout) process.stdout.write(result.stdout);
     if (result.stderr) process.stderr.write(result.stderr);
     return result.status === null ? 1 : result.status;
@@ -93,5 +132,5 @@ function main(argv) {
     return 1;
   }
 }
-if (require.main === module) process.exitCode = main(process.argv.slice(2));
+if (require.main === module) main(process.argv.slice(2)).then(status => { process.exitCode = status; });
 module.exports = { resolveNative };
